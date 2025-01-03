@@ -31,4 +31,9 @@ main :: proc() {
 		1.1919,
 	}
 	fmt.println(mtl.cholesky(mat2))
+
+    fmt.println(mtl.factorial(4))
+    fmt.println(u8(mtl.Month.April) == 4)
+    fmt.println(uint(mtl.Month.March))
+    
 }
