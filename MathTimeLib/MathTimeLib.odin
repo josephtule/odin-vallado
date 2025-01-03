@@ -5,6 +5,9 @@ import "core:fmt"
 import "core:math"
 import la "core:math/linalg"
 
+is_float :: intrinsics.type_is_float
+is_int :: intrinsics.type_is_integer
+
 pi :: 3.14159265358979323846
 twopi :: 2.0 * pi
 infinite :: 999999.9
@@ -15,11 +18,11 @@ edirection :: enum {
 	eFrom,
 }
 
-round :: proc(x: f64) -> f64 {
+round :: proc(x: $T) -> T where is_float(T) {
 	return math.floor(x + 0.5)
 }
 
-cot :: proc(x: f64) -> f64 {
+cot :: proc(x: $T) -> T where is_float(T) {
 	temp := math.tan(x)
 	if (math.abs(temp) < 0.00000001) {
 		return infinite
@@ -28,7 +31,7 @@ cot :: proc(x: f64) -> f64 {
 	}
 }
 
-acosh :: proc(x: f64) -> f64 {
+acosh :: proc(x: $T) -> T where is_float(T) {
 	temp: f64
 	if (x * x - 1. < 0.) {
 		temp = undefined
@@ -39,27 +42,28 @@ acosh :: proc(x: f64) -> f64 {
 	return temp
 }
 
-asinh :: proc(x: f64) -> f64 {
+asinh :: proc(x: $T) -> T where is_float(T) {
 	return math.ln(x + math.sqrt(x * x + 1.))
 }
 
-dot :: proc(x, y: [3]f64) -> f64 {
-	return x[0] * y[0] + x[1] * y[1] + x[2] * y[2]
+dot :: proc(x, y: [$N]$T) -> T where is_float(T) {
+	return la.dot(x, y)
 }
 
-mag :: proc(x: [3]f64) -> f64 {
-	return math.sqrt(x[0] * x[0] + x[1] * x[1] + x[2] * x[2])
+mag :: proc(x: [$N]$T) -> T where is_float(T) {
+	return la.vector_length(x)
 }
 
-cross :: proc(vec1, vec2: [3]f64) -> [3]f64 {
+cross :: proc(vec1, vec2: [3]$T) -> [3]T where is_float(T) {
 	out: [3]f64
 	out[0] = vec1[1] * vec2[2] - vec1[2] * vec2[1]
 	out[1] = vec1[2] * vec2[0] - vec1[0] * vec2[2]
 	out[2] = vec1[0] * vec2[1] - vec1[1] * vec2[0]
 	return out
+	// return la.cross(vec1,vec2)
 }
 
-norm :: proc(vec: [3]f64) -> [3]f64 {
+norm :: proc(vec: [$N]$T) -> [N]T where is_float(T) {
 	small: f64 : 0.00001
 	magv: f64 = mag(vec)
 	out: [3]f64
@@ -69,9 +73,10 @@ norm :: proc(vec: [3]f64) -> [3]f64 {
 		out = {0., 0., 0.}
 	}
 	return out
+	// return norm
 }
 
-angle :: proc(vec1, vec2: [3]f64) -> f64 {
+angle :: proc(vec1, vec2: [$N]$T) -> T where is_float(T) {
 	small := 0.00000001
 	magv1 := mag(vec1)
 	magv2 := mag(vec2)
@@ -87,7 +92,7 @@ angle :: proc(vec1, vec2: [3]f64) -> f64 {
 }
 
 
-sgn :: proc(x: f64) -> f64 {
+sgn :: proc(x: $T) -> T where is_float(T) {
 	if x < 0.0 {
 		return -1.0
 	} else {
@@ -95,7 +100,8 @@ sgn :: proc(x: f64) -> f64 {
 	}
 }
 
-rotmat :: proc(angle: f64, axis: $I) -> matrix[3, 3]f64 where intrinsics.type_is_integer(I) {
+rotmat :: proc(angle: $T, axis: $I) -> matrix[3, 3]f64 where is_int(I),
+	is_float(T) {
 	// replaces rotimat
 	R: matrix[3, 3]f64
 	c := math.cos(angle)
@@ -121,7 +127,8 @@ rotmat :: proc(angle: f64, axis: $I) -> matrix[3, 3]f64 where intrinsics.type_is
 	return R
 }
 
-rotvec :: proc(vec: [3]f64, angle: f64, axis: $I) -> [3]f64 where intrinsics.type_is_integer(I) {
+rotvec :: proc(vec: [3]$T, angle: T, axis: $I) -> [3]f64 where is_int(I),
+	is_float(T) {
 	// replaces roti
 	return rotmat(angle, axis) * v
 }
@@ -141,13 +148,7 @@ repeat_vec :: proc(vec: ^[$N]$T, val: T) where intrinsics.type_is_numeric(T) {
 }
 
 
-ludecomp :: proc(
-	mat: matrix[$N, N]$T,
-) -> (
-	matrix[N, N]T,
-	[N]int,
-	int,
-) where intrinsics.type_is_float(T) {
+ludecomp :: proc(mat: matrix[$N, N]$T) -> (matrix[N, N]T, [N]int, int) where is_float(T) {
 	small: T = cast(T)(0.000001)
 	order: int = N
 
@@ -217,11 +218,7 @@ ludecomp :: proc(
 	return lu, index, order
 }
 
-lubksub :: proc(
-	lu: matrix[$N, N]$T,
-	b: [N]T,
-	index: [N]int,
-) -> [N]T where intrinsics.type_is_float(T) {
+lubksub :: proc(lu: matrix[$N, N]$T, b: [N]T, index: [N]int) -> [N]T where is_float(T) {
 	i, j, iptr, ii: int
 	sum: T
 	sol: [N]T = b
@@ -257,7 +254,7 @@ lubksub :: proc(
 }
 
 
-matinverse :: proc(mat: matrix[$N, N]$T) -> matrix[N, N]T where intrinsics.type_is_float(T) {
+matinverse :: proc(mat: matrix[$N, N]$T) -> matrix[N, N]T where is_float(T) {
 	i, j: int
 	if N <= 4 {
 		return la.inverse(mat)
@@ -282,11 +279,11 @@ matinverse :: proc(mat: matrix[$N, N]$T) -> matrix[N, N]T where intrinsics.type_
 }
 
 
-determinant :: proc(mat: matrix[$N, N]$T) -> T where intrinsics.type_is_float(T) {
+determinant :: proc(mat: matrix[$N, N]$T) -> T where is_float(T) {
 	return la.determinant(mat)
 }
 
-cholesky :: proc(mat: matrix[$N, N]$T) -> matrix[N, N]T where intrinsics.type_is_float(T) {
+cholesky :: proc(mat: matrix[$N, N]$T) -> matrix[N, N]T where is_float(T) {
 	// gives lower chol, transpose to get upper (matlab)
 	res: matrix[N, N]T
 	n := N
@@ -310,18 +307,127 @@ cholesky :: proc(mat: matrix[$N, N]$T) -> matrix[N, N]T where intrinsics.type_is
 	return res
 }
 
+RootsOptions :: enum {
+	All, // all roots
+	Real, // real roots only
+	Unique, // unique real root only
+}
+
+// TODO: check
 quadratic :: proc(
 	a, b, c: $T,
+	opt: RootsOptions,
 ) -> (
-	real1, comp1, real2, comp2: T,
-) where intrinsics.type_is_float(T) {
+	real1, imag1, real2, imag2: T,
+) where is_float(T) {
 	small := 0.0000001
-	real1, comp1, real2, comp2: T
+	real1, imag1, real2, imag2: T
 	discrim: T = b * b - 4. * a * c
 
-    if math.abs(discrim) < small {
-        real1 = -b/(2.*a);
-        real2 =real1;
-        // TODO: complete this
-    }
+	if math.abs(discrim) < small {
+		real1 = -b / (2. * a)
+		real2 = real1
+		if opt == RootsOptions.Unique {
+			real2 = 99999.9
+		}
+
+	} else {
+		if math.abs(a) < small {
+			real1 = -c / b
+		} else {
+			if opt == RootsOptions.All {
+				real1 = -b / (2. * a)
+				real2 = real1
+				imag1 = sqrt(-discrim) / (2. * a)
+				imag2 = -imag1
+			} else {
+				real1 = 99999.9
+				real2 = 99999.9
+			}
+		}
+	}
+	return real1, imag1, real2, imag2
 }
+
+// TODO: check
+cubicspl :: proc(p1, p2, p3, p4: $T) -> (T, T, T, T) where is_float(T) {
+	acu0: T = p2
+	acu1: T = -p1 / 3. - 0.5 * p2 + p3 - p4 / 6.
+	acu2: T = 0.5 * p1 - p2 + 0.5 * p3
+	acu3: T = -p1 / 6. + 0.5 * p2 - 0.5 * p3 + p4 / 6.
+}
+
+// TODO: check 
+cubic :: proc(
+	a, b, c, d: $T,
+	opt: RootsOptions,
+) -> (
+	real1, imag1, real2, imag2, real3, imag3: T,
+) where is_float(T) {
+	rad := 57.29577951308230
+	onethird := 1. / 3.
+	small = 0.00000001
+	temp1, temp2, p, q, r, delta, e0, cosphi, sinphi, phi: T
+	real1, real2, real3: T
+	imag1, imag2, imag3: T
+
+	if math.abs(a) > small {
+		// force coefs into std form
+		p = b / a
+		q = c / a
+		r = d / a
+		a = onethird * (3. * q - p * p)
+		b = (1. / 27.) * (2. * p * p * p - 9. * p * q + 27 * r)
+
+		delta = (a * a * a / 27.) + (b * b * 0.25)
+
+		// cardan's formula
+		if (delta > small) {
+			temp1 = (-b * 0.5) + sqrt(delta)
+			temp2 = (-b * 0.5) - sqrt(delta)
+			temp1 = sgn(temp1) * math.pow(math.abs(temp1), onethird)
+			temp2 = sgn(temp2) * math.pow(math.abs(temp2), onethird)
+			real1 = temp1 + temp2 - p * onethird
+
+			if opt == RootsOptions.All {
+				real2 = -0.5 * (temp1 + temp2) - p * onethird
+				imag2 = -0.5 * sqrt(3.) * (temp1 - temp2)
+				real3 = -0.5 * (temp1 + temp2) - p * onethird
+				imag3 = -imag2
+			} else {
+				real2 = 99999.9
+				real3 = 99999.9
+			}
+		} else {
+			if math.abs(delta) < small {
+				real1 = -2. * sgn(b) * math.pow(math.abs(b * 0.5), onethird) - p * onethird
+				real2 = sgn(b) * math.pow(math.abs(b * 0.5), onethird) - p * onethird
+				if opt == RootsOptions.Unique {
+					real3 = 99999.9
+				} else {
+					real3 = real2
+				}
+			} else {
+				e0 = 2. * sqrt(-a * onethird)
+				cosphi = (-b / (2. * math.sqrt(-a * a * a / 27)))
+				sinphi = math.sqrt(1 - cosphi * cosphi)
+				phi = math.atan2(sinphi, cosphi)
+				if phi < 0. {
+					phi += 2. * math.pi
+				}
+				real1 = e0 * math.cos(phi * onethird) - p * onethird
+				real2 = e0 * math.cos(phi * onethird + 120. / rad) - p * onethird
+				real3 = e0 * math.cos(phi * onethird + 240. / rad) - p * onethird
+			}
+
+		}
+	} else {
+		real1, imag1, real2, imag2 = quadratic(b, c, d, opt)
+		real3 = 99999.9
+		imag3 = 99999.9
+	}
+	return real1, imag1, real2, imag2, real3, imag3
+}
+
+
+cubicinterp :: proc()
