@@ -35,5 +35,11 @@ main :: proc() {
     fmt.println(mtl.factorial(4))
     fmt.println(u8(mtl.Month.April) == 4)
     fmt.println(uint(mtl.Month.March))
-    
+    fmt.println(testproc(3.))
+}
+
+testproc :: proc(a: f64) -> f64 {
+	a := 4.
+	a += a
+	return a
 }
