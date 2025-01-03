@@ -73,9 +73,9 @@ elsetrec :: struct {
     xgh3   , xgh4   , xh2    , xh3      , xi2    , xi3     , xl2   , xl3   ,
     xl4    , xlamo  , zmol   , zmos     , atime  , xli     , xni : f64,
 
-    //
+	// Orbital parameters
     a, altp, alta, epochdays, jdsatepoch, jdsatepochF, nddot, ndot,
-    bstar, rcse, inclo, nodeo, ecco, argpo, mo, no_kozai : f64,
+	bstar, rcse, inclo, nodeo, ecco, argpo, mo, no_kozai : f64,
 
     // sgp4fix new variables from tle
     classification : Classification,
@@ -1220,7 +1220,7 @@ sgp4init :: proc(
 	return true
 }
 
-sgp4 :: proc(satrec : ^elsetrec, tsince: f64, r,v : [3]f64) -> bool {
+sgp4 :: proc(satrec: ^elsetrec, tsince: f64, r, v: [3]f64) -> bool {
 	// TODO: complete this
 
 	return true
