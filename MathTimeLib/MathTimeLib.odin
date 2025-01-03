@@ -1,9 +1,9 @@
 package MathTimeLib
 
+import "base:intrinsics"
 import "core:fmt"
 import "core:math"
 import la "core:math/linalg"
-import "base:intrinsics"
 
 pi :: 3.14159265358979323846
 twopi :: 2.0 * pi
@@ -134,4 +134,194 @@ vecouter :: proc(vec1, vec2: [3]f64) -> matrix[3, 3]f64 {
 	return la.outer_product(vec1, vec2)
 }
 
+repeat_vec :: proc(vec: ^[$N]$T, val: T) where intrinsics.type_is_numeric(T) {
+	for i in 0 ..< len(vec) {
+		vec[i] = val
+	}
+}
 
+
+ludecomp :: proc(
+	mat: matrix[$N, N]$T,
+) -> (
+	matrix[N, N]T,
+	[N]int,
+	int,
+) where intrinsics.type_is_float(T) {
+	small: T = cast(T)(0.000001)
+	order: int = N
+
+	scale: [N]T
+	index: [N]int
+	lu: matrix[N, N]T = mat
+
+	imax: int = 0
+	for i in 0 ..< order {
+		amax: T = 0.0
+		for j in 0 ..< order {
+			if math.abs(lu[i, j]) > amax {
+				amax = math.abs(lu[i, j])
+			}
+		}
+		if math.abs(amax) < small {
+			fmt.eprintln("ERROR: Singular matrix while finding LU decomposition")
+		}
+		scale[i] = 1.0 / amax
+	}
+
+	for j in 0 ..< order {
+		for i in 0 ..< j {
+			sum: T = lu[i, j]
+			for k in 0 ..< i {
+				sum -= lu[i, k] * lu[k, j]
+			}
+			lu[i, j] = sum
+		}
+
+		amax: T = 0.0
+		for i in j ..< order {
+			sum: T = lu[i, j]
+			for k in 0 ..< j {
+				sum -= lu[i, k] * lu[k, j]
+			}
+			lu[i, j] = sum
+			dum: T = scale[i] * math.abs(sum)
+			if dum >= amax {
+				imax = i
+				amax = dum
+			}
+		}
+
+		if j != imax {
+			for k in 0 ..< order {
+				dum: T = lu[imax, k]
+				lu[imax, k] = lu[j, k]
+				lu[j, k] = dum
+			}
+			scale[imax] = scale[j]
+		}
+		index[j] = imax
+
+		if math.abs(lu[j, j]) < small {
+			fmt.eprintln("ERROR: Singular matrix while finding LU decomposition")
+		}
+
+		if j != order - 1 {
+			dum: T = 1.0 / lu[j, j]
+			for i in (j + 1) ..< order {
+				lu[i, j] *= dum
+			}
+		}
+	}
+
+	return lu, index, order
+}
+
+lubksub :: proc(
+	lu: matrix[$N, N]$T,
+	b: [N]T,
+	index: [N]int,
+) -> [N]T where intrinsics.type_is_float(T) {
+	i, j, iptr, ii: int
+	sum: T
+	sol: [N]T = b
+	order := N
+	ii = -1
+	for i = 0; i < order; i += 1 {
+		iptr = index[i]
+		sum = sol[iptr]
+		sol[iptr] = sol[i]
+		if (ii != -1) {
+			for j = ii; j <= i - 1; j += 1 {
+				sum -= lu[i, j] * sol[j]
+			}
+		} else {
+			if sum != 0. {
+				ii = i
+			}
+		}
+		sol[i] = sum
+	}
+
+	sol[order - 1] = sol[order - 1] / lu[order - 1, order - 1]
+
+	for i = order - 2; i >= 0; i -= 1 {
+		sum = sol[i]
+		for j = i + 1; j < order; j += 1 {
+			sum -= lu[i, j] * sol[j]
+		}
+		sol[i] = sum / lu[i, i]
+	}
+
+	return sol
+}
+
+
+matinverse :: proc(mat: matrix[$N, N]$T) -> matrix[N, N]T where intrinsics.type_is_float(T) {
+	i, j: int
+	if N <= 4 {
+		return la.inverse(mat)
+	}
+	matinv := mat
+	lu, index, order := ludecomp(mat)
+	b: [N]T;repeat_vec(&b, T(order))
+	for j = 0; j < order; j += 1 {
+		for i = 0; i < order; i += 1 {
+			if i == j {
+				b[i] = 1.
+			} else {
+				b[i] = 0.
+			}
+		}
+		b = lubksub(lu, b, index)
+		for i = 0; i < order; i += 1 {
+			matinv[i, j] = b[i]
+		}
+	}
+	return matinv
+}
+
+
+determinant :: proc(mat: matrix[$N, N]$T) -> T where intrinsics.type_is_float(T) {
+	return la.determinant(mat)
+}
+
+cholesky :: proc(mat: matrix[$N, N]$T) -> matrix[N, N]T where intrinsics.type_is_float(T) {
+	// gives lower chol, transpose to get upper (matlab)
+	res: matrix[N, N]T
+	n := N
+	for r := 0; r < n; r += 1 {
+		for c := 0; c <= r; c += 1 {
+			if c == r {
+				sum: T = 0.
+				for j := 0; j < c; j += 1 {
+					sum += res[c, j] * res[c, j]
+				}
+				res[c, c] = math.sqrt(mat[c, c] - sum)
+			} else {
+				sum: T = 0
+				for j := 0; j < c; j += 1 {
+					sum += res[r, j] * res[c, j]
+				}
+				res[r, c] = 1. / res[c, c] * (mat[r, c] - sum)
+			}
+		}
+	}
+	return res
+}
+
+quadratic :: proc(
+	a, b, c: $T,
+) -> (
+	real1, comp1, real2, comp2: T,
+) where intrinsics.type_is_float(T) {
+	small := 0.0000001
+	real1, comp1, real2, comp2: T
+	discrim: T = b * b - 4. * a * c
+
+    if math.abs(discrim) < small {
+        real1 = -b/(2.*a);
+        real2 =real1;
+        // TODO: complete this
+    }
+}
