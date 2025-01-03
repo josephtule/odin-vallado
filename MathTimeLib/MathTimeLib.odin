@@ -148,7 +148,13 @@ repeat_vec :: proc(vec: ^[$N]$T, val: T) where intrinsics.type_is_numeric(T) {
 }
 
 
-ludecomp :: proc(mat: matrix[$N, N]$T) -> (matrix[N, N]T, [N]int, int) where is_float(T) {
+ludecomp :: proc(
+	mat: matrix[$N, N]$T,
+) -> (
+	matrix[N, N]T,
+	[N]int,
+	int,
+) where is_float(T) {
 	small: T = cast(T)(0.000001)
 	order: int = N
 
@@ -218,7 +224,11 @@ ludecomp :: proc(mat: matrix[$N, N]$T) -> (matrix[N, N]T, [N]int, int) where is_
 	return lu, index, order
 }
 
-lubksub :: proc(lu: matrix[$N, N]$T, b: [N]T, index: [N]int) -> [N]T where is_float(T) {
+lubksub :: proc(
+	lu: matrix[$N, N]$T,
+	b: [N]T,
+	index: [N]int,
+) -> [N]T where is_float(T) {
 	i, j, iptr, ii: int
 	sum: T
 	sol: [N]T = b
@@ -413,7 +423,7 @@ cubic :: proc(
 				sinphi = math.sqrt(1 - cosphi * cosphi)
 				phi = math.atan2(sinphi, cosphi)
 				if phi < 0. {
-					phi += 2. * math.pi
+					phi += 2. * pi
 				}
 				real1 = e0 * math.cos(phi * onethird) - p * onethird
 				real2 = e0 * math.cos(phi * onethird + 120. / rad) - p * onethird
@@ -430,7 +440,9 @@ cubic :: proc(
 }
 
 
-cubicinterp :: proc(a1, b1, c1, d1, a2, b2, c2, d2, vin: $T) where is_float(T) {
+cubicinterp :: proc(
+	a1, b1, c1, d1, a2, b2, c2, d2, vin: $T,
+) where is_float(T) {
 	kc0, kc1, kc2, kc3: T
 	ac0, ac1, ac2, ac3: T
 	real1, imag1: T
@@ -440,7 +452,13 @@ cubicinterp :: proc(a1, b1, c1, d1, a2, b2, c2, d2, vin: $T) where is_float(T) {
 
 	ac0, ac1, ac2, ac3 = cubicspl(a1, b1, c1, d1)
 	kc0, kc1, kc2, kc3 = cubicspl(a2, b2, c2, d2)
-	real1, imag1, real2, imag2, real3, imag3 = cubic(kc3, kc2, kc1, kc0 - vin, RootsOptions.Real)
+	real1, imag1, real2, imag2, real3, imag3 = cubic(
+		kc3,
+		kc2,
+		kc1,
+		kc0 - vin,
+		RootsOptions.Real,
+	)
 
 	if real1 >= -0.000001 && real1 <= 1.001 {
 		vout = real1
@@ -548,7 +566,12 @@ getIntDayofweek :: proc(jd: f64) -> uint {
 	return uint(math.floor(jdtemp - 7. * math.floor((jdtemp + 1.) / 7) + 2))
 }
 
-jday :: proc(year, month, day, hr, minute: int, sec: f64) -> (jd, jd_frac: f64) {
+jday :: proc(
+	year, month, day, hr, minute: int,
+	sec: f64,
+) -> (
+	jd, jd_frac: f64,
+) {
 	// convert because likely the other functions will read the following in as integers
 	yearf := f64(year)
 	monf := f64(month)
@@ -576,7 +599,13 @@ DateType :: enum {
 	Juilian,
 	Gregorian,
 }
-jdayall :: proc(year, month, day, hr, minute: int, sec: f64, type: DateType) -> (jd: f64) {
+jdayall :: proc(
+	year, month, day, hr, minute: int,
+	sec: f64,
+	type: DateType,
+) -> (
+	jd: f64,
+) {
 	yearf := f64(year)
 	monf := f64(month)
 	dayf := f64(day)
@@ -593,7 +622,8 @@ jdayall :: proc(year, month, day, hr, minute: int, sec: f64, type: DateType) -> 
 	if type == .Juilian {
 		b = 0.
 	} else {
-		b = 2. - math.floor(yearf * 0.01) + math.floor(math.floor(yearf * 0.01) * 0.25)
+		b =
+			2. - math.floor(yearf * 0.01) + math.floor(math.floor(yearf * 0.01) * 0.25)
 		jd =
 			math.floor(365.25 * (yearf + 4716)) +
 			math.floor(30.6001 * (monf + 1.)) +
@@ -620,7 +650,13 @@ DaysInMonth :: enum u8 {
 	Dec = 31,
 }
 
-days2mdhms :: proc(year: int, days: f64) -> (month, day, hr, minute: int, sec: f64) {
+days2mdhms :: proc(
+	year: int,
+	days: f64,
+) -> (
+	month, day, hr, minute: int,
+	sec: f64,
+) {
 	i, inttemp, dayofyr: int
 	temp: f64
 	lmonth: [13]int = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
@@ -648,7 +684,12 @@ days2mdhms :: proc(year: int, days: f64) -> (month, day, hr, minute: int, sec: f
 }
 
 
-invjday :: proc(jd, jd_frac: f64) -> (year, month, day, hr, minute: int, sec: f64) {
+invjday :: proc(
+	jd, jd_frac: f64,
+) -> (
+	year, month, day, hr, minute: int,
+	sec: f64,
+) {
 	leapyears: int
 	dt, days, tu, temp: f64
 	jd := jd
@@ -703,7 +744,11 @@ finddays :: proc(year, month, day, hr, minute: int, sec: f64) -> (days: f64) {
 }
 
 
-hms_sec :: proc(hour, minute: ^int, second, utsec: ^f64, direction: edirection) {
+hms_sec :: proc(
+	hour, minute: ^int,
+	second, utsec: ^f64,
+	direction: edirection,
+) {
 	temp: f64
 
 	if direction == .eTo {
@@ -795,7 +840,7 @@ convtime :: proc(
 	deg2rad, jd, jdFrac, sectemp, me: f64
 	localhr, hrtemp, mintemp: int
 
-	deg2rad = math.PI / 180.0
+	deg2rad = pi / 180.0
 
 	// ------------------------  implementation   ------------------
 	jd, jdFrac = jday(year, mon, day, 0, 0, 0.0)
