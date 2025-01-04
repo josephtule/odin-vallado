@@ -4,6 +4,7 @@ import "base:intrinsics"
 import "core:fmt"
 import "core:math"
 import la "core:math/linalg"
+import "core:strings"
 
 is_float :: intrinsics.type_is_float
 is_int :: intrinsics.type_is_integer
@@ -49,7 +50,7 @@ SGP4Version_current :: SGP4Version{2020, 7, 13}
 
 // odinfmt: disable
 elsetrec :: struct {
-	satnum:                 u16, // not sure if this should be a string or u16 // NOTE: might need to change this 
+	satnum:                 int, 
 	epochyr, epochtynumrev: int,
 	error:                  int,
     operationmode : OperationMode,
@@ -79,8 +80,8 @@ elsetrec :: struct {
 
     // sgp4fix new variables from tle
     classification : Classification,
-    intldesg : u16, // NOTE: also not sure about this one
-    intldesg_piece : rune,
+    intldesg : int, 
+    intldesg_piece : string,
     ephtype: int,
     elnum , revnum : i64,
 
@@ -838,7 +839,7 @@ gstime_SGP4 :: proc(jdut1: f64) -> f64 {
 sgp4init :: proc(
 	whichconst: gravconsttype,
 	opsmode: OperationMode,
-	satn: u16,
+	satn: int,
 	epoch: f64,
 	xbstar, xndot, xnddot, xecco, xargpo, xinclo, xmo, xno_kozai, xnodeo: f64,
 	satrec: ^elsetrec,
@@ -1211,7 +1212,7 @@ sgp4init :: proc(
 	// sgp4fix take out check to let satellites process until they are actually
 	// below earth surface
 	//       if(satrec.error == 0)
-	sgp4(satrec, 0.0, r, v)
+	sgp4(satrec, 0.0, &r, &v)
 
 	satrec.init = false
 
@@ -1220,9 +1221,265 @@ sgp4init :: proc(
 	return true
 }
 
-sgp4 :: proc(satrec: ^elsetrec, tsince: f64, r, v: [3]f64) -> bool {
-	// TODO: complete this
+sgp4 :: proc(satrec: ^elsetrec, tsince: f64, r, v: ^[3]f64) -> bool {
+	am, axnl, aynl, betal: f64
+	cosim, cnod, cos2u, coseo1, cosi, cosip, cosisq, cossu, cosu: f64
+	delm, delomg: f64
+	em, emsq, ecose, el2, eo1, ep, esine: f64
+	argpm, argpp, argpdf: f64
+	pl, mrt, mvt, rdotl, rl, rvdot, rvdotl: f64
+	sinim, sin2u, sineo1, sini, sinip, sinsu, sinu, snod, su: f64
+	t2, t3, t4: f64
+	tem5, temp, temp1, temp2, tempa, tempe, templ: f64
+	u, ux, uy, uz, vx, vy, vz: f64
+	inclm, mm, nm, nodem: f64
+	xinc, xincp, xl, xlm, mp, xmdf, xmx, xmy, nodedf, xnode: f64
+	nodep, tc, dndt, vkmpersec, delmtemp: f64
+	ktr: int
 
+	temp4 :: 1.5e-12
+	twopi :: 2. * pi
+	x2o3 :: 2. / 3.
+
+	vkmpersec = satrec.radiusearthkm * satrec.xke / 60.0
+
+	/* --------------------- clear sgp4 error flag ----------------- */
+	satrec.t = tsince
+	satrec.error = 0
+
+	/* ------- update for secular gravity and atmospheric drag ----- */
+	xmdf = satrec.mo + satrec.mdot * satrec.t
+	argpdf = satrec.argpo + satrec.argpdot * satrec.t
+	nodedf = satrec.nodeo + satrec.nodedot * satrec.t
+	argpm = argpdf
+	mm = xmdf
+	t2 = satrec.t * satrec.t
+	nodem = nodedf + satrec.nodecf * t2
+	tempa = 1.0 - satrec.cc1 * satrec.t
+	tempe = satrec.bstar * satrec.cc4 * satrec.t
+	templ = satrec.t2cof * t2
+
+	if (satrec.isimp != 1) {
+		delomg = satrec.omgcof * satrec.t
+		// sgp4fix use mutliply for speed instead of pow
+		delmtemp = 1.0 + satrec.eta * cos(xmdf)
+		delm = satrec.xmcof * (delmtemp * delmtemp * delmtemp - satrec.delmo)
+		temp = delomg + delm
+		mm = xmdf + temp
+		argpm = argpdf - temp
+		t3 = t2 * satrec.t
+		t4 = t3 * satrec.t
+		tempa = tempa - satrec.d2 * t2 - satrec.d3 * t3 - satrec.d4 * t4
+		tempe = tempe + satrec.bstar * satrec.cc5 * (sin(mm) - satrec.sinmao)
+		templ =
+			templ + satrec.t3cof * t3 + t4 * (satrec.t4cof + satrec.t * satrec.t5cof)
+	}
+
+	nm = satrec.no_unkozai
+	em = satrec.ecco
+	inclm = satrec.inclo
+	if (satrec.method == .deep) {
+		tc = satrec.t
+			// odinfmt: disable
+        dspace(satrec.irez, satrec.d2201, satrec.d2211, satrec.d3210,
+               satrec.d3222, satrec.d4410, satrec.d4422, satrec.d5220,
+               satrec.d5232, satrec.d5421, satrec.d5433, satrec.dedt,
+               satrec.del1, satrec.del2, satrec.del3, satrec.didt, satrec.dmdt,
+               satrec.dnodt, satrec.domdt, satrec.argpo, satrec.argpdot,
+               satrec.t, tc, satrec.gsto, satrec.xfact, satrec.xlamo,
+               satrec.no_unkozai, &satrec.atime, &em, &argpm, &inclm, &satrec.xli,
+               &mm, &satrec.xni, &nodem, &dndt, &nm);
+		// odinfmt: enable
+	} // if method = d
+	if (nm <= 0.0) {
+		//         printf("# error nm %f\n", nm);
+		satrec.error = 2
+		// sgp4fix add return
+		return false
+	}
+	am = pow((satrec.xke / nm), x2o3) * tempa * tempa
+	nm = satrec.xke / pow(am, 1.5)
+	em = em - tempe
+
+	// fix tolerance for error recognition
+	// sgp4fix am is fixed from the previous nm check
+	if ((em >= 1.0) || (em < -0.001))  /* || (am < 0.95)*/{
+		//         printf("# error em %f\n", em);
+		satrec.error = 1
+		// sgp4fix to return if there is an error in eccentricity
+		return false
+	}
+	// sgp4fix fix tolerance to avoid a divide by zero
+	if (em < 1.0e-6) {
+		em = 1.0e-6
+	}
+	mm = mm + satrec.no_unkozai * templ
+	xlm = mm + argpm + nodem
+	emsq = em * em
+	temp = 1.0 - emsq
+
+	nodem = fmod(nodem, twopi)
+	argpm = fmod(argpm, twopi)
+	xlm = fmod(xlm, twopi)
+	mm = fmod(xlm - argpm - nodem, twopi)
+
+	// sgp4fix recover singly averaged mean elements
+	satrec.am = am
+	satrec.em = em
+	satrec.im = inclm
+	satrec.Om = nodem
+	satrec.om = argpm
+	satrec.mm = mm
+	satrec.nm = nm
+
+	/* ----------------- compute extra mean quantities ------------- */
+	sinim = sin(inclm)
+	cosim = cos(inclm)
+
+	/* -------------------- add lunar-solar periodics -------------- */
+	ep = em
+	xincp = inclm
+	argpp = argpm
+	nodep = nodem
+	mp = mm
+	sinip = sinim
+	cosip = cosim
+	if (satrec.method == .deep) {
+			// odinfmt: disable
+        dpper(satrec.e3, satrec.ee2, satrec.peo, satrec.pgho, satrec.pho,
+              satrec.pinco, satrec.plo, satrec.se2, satrec.se3, satrec.sgh2,
+              satrec.sgh3, satrec.sgh4, satrec.sh2, satrec.sh3, satrec.si2,
+              satrec.si3, satrec.sl2, satrec.sl3, satrec.sl4, satrec.t,
+              satrec.xgh2, satrec.xgh3, satrec.xgh4, satrec.xh2, satrec.xh3,
+              satrec.xi2, satrec.xi3, satrec.xl2, satrec.xl3, satrec.xl4,
+              satrec.zmol, satrec.zmos, satrec.inclo, false, &ep, &xincp, &nodep,
+              &argpp, &mp, satrec.operationmode);
+		// odinfmt: enable
+		if (xincp < 0.0) {
+			xincp = -xincp
+			nodep = nodep + pi
+			argpp = argpp - pi
+		}
+		if ((ep < 0.0) || (ep > 1.0)) {
+			//            printf("# error ep %f\n", ep);
+			satrec.error = 3
+			// sgp4fix add return
+			return false
+		}
+	} // if method = d
+
+	/* -------------------- long period periodics ------------------ */
+	if (satrec.method == .deep) {
+		sinip = sin(xincp)
+		cosip = cos(xincp)
+		satrec.aycof = -0.5 * satrec.j3oj2 * sinip
+		// sgp4fix for divide by zero for xincp = 180 deg
+		if (fabs(cosip + 1.0) > 1.5e-12) {
+			satrec.xlcof =
+				-0.25 * satrec.j3oj2 * sinip * (3.0 + 5.0 * cosip) / (1.0 + cosip)
+		} else {
+			satrec.xlcof = -0.25 * satrec.j3oj2 * sinip * (3.0 + 5.0 * cosip) / temp4
+		}
+	}
+	axnl = ep * cos(argpp)
+	temp = 1.0 / (am * (1.0 - ep * ep))
+	aynl = ep * sin(argpp) + temp * satrec.aycof
+	xl = mp + argpp + nodep + temp * satrec.xlcof * axnl
+
+	/* --------------------- solve kepler's equation --------------- */
+	u = fmod(xl - nodep, twopi)
+	eo1 = u
+	tem5 = 9999.9
+	ktr = 1
+	//   sgp4fix for kepler iteration
+	//   the following iteration needs better limits on corrections
+	for ((fabs(tem5) >= 1.0e-12) && (ktr <= 10)) {
+		sineo1 = sin(eo1)
+		coseo1 = cos(eo1)
+		tem5 = 1.0 - coseo1 * axnl - sineo1 * aynl
+		tem5 = (u - aynl * coseo1 + axnl * sineo1 - eo1) / tem5
+		if (fabs(tem5) >= 0.95) {
+			tem5 = tem5 > 0.0 ? 0.95 : -0.95
+		}
+		eo1 = eo1 + tem5
+		ktr = ktr + 1
+	}
+
+
+	/* ------------- short period preliminary quantities ----------- */
+	ecose = axnl * coseo1 + aynl * sineo1
+	esine = axnl * sineo1 - aynl * coseo1
+	el2 = axnl * axnl + aynl * aynl
+	pl = am * (1.0 - el2)
+	if (pl < 0.0) {
+		//         printf("# error pl %f\n", pl);
+		satrec.error = 4
+		// sgp4fix add return
+		return false
+	} else {
+		rl = am * (1.0 - ecose)
+		rdotl = sqrt(am) * esine / rl
+		rvdotl = sqrt(pl) / rl
+		betal = sqrt(1.0 - el2)
+		temp = esine / (1.0 + betal)
+		sinu = am / rl * (sineo1 - aynl - axnl * temp)
+		cosu = am / rl * (coseo1 - axnl + aynl * temp)
+		su = atan2(sinu, cosu)
+		sin2u = (cosu + cosu) * sinu
+		cos2u = 1.0 - 2.0 * sinu * sinu
+		temp = 1.0 / pl
+		temp1 = 0.5 * satrec.j2 * temp
+		temp2 = temp1 * temp
+
+		/* -------------- update for short period periodics ------------ */
+		if (satrec.method == .deep) {
+			cosisq = cosip * cosip
+			satrec.con41 = 3.0 * cosisq - 1.0
+			satrec.x1mth2 = 1.0 - cosisq
+			satrec.x7thm1 = 7.0 * cosisq - 1.0
+		}
+		mrt =
+			rl * (1.0 - 1.5 * temp2 * betal * satrec.con41) +
+			0.5 * temp1 * satrec.x1mth2 * cos2u
+		su = su - 0.25 * temp2 * satrec.x7thm1 * sin2u
+		xnode = nodep + 1.5 * temp2 * cosip * sin2u
+		xinc = xincp + 1.5 * temp2 * cosip * sinip * cos2u
+		mvt = rdotl - nm * temp1 * satrec.x1mth2 * sin2u / satrec.xke
+		rvdot =
+			rvdotl +
+			nm * temp1 * (satrec.x1mth2 * cos2u + 1.5 * satrec.con41) / satrec.xke
+
+		/* --------------------- orientation vectors ------------------- */
+		sinsu = sin(su)
+		cossu = cos(su)
+		snod = sin(xnode)
+		cnod = cos(xnode)
+		sini = sin(xinc)
+		cosi = cos(xinc)
+		xmx = -snod * cosi
+		xmy = cnod * cosi
+		ux = xmx * sinsu + cnod * cossu
+		uy = xmy * sinsu + snod * cossu
+		uz = sini * sinsu
+		vx = xmx * cossu - cnod * sinsu
+		vy = xmy * cossu - snod * sinsu
+		vz = sini * cossu
+
+		/* --------- position and velocity (in km and km/sec) ---------- */
+		r[0] = (mrt * ux) * satrec.radiusearthkm
+		r[1] = (mrt * uy) * satrec.radiusearthkm
+		r[2] = (mrt * uz) * satrec.radiusearthkm
+		v[0] = (mvt * ux + rvdot * vx) * vkmpersec
+		v[1] = (mvt * uy + rvdot * vy) * vkmpersec
+		v[2] = (mvt * uz + rvdot * vz) * vkmpersec
+	} // if pl > 0
+
+	// sgp4fix for decaying satellites
+	if (mrt < 1.0) {
+		//         printf("# decay condition %11.6f \n",mrt);
+		satrec.error = 6
+		return false
+	}
 	return true
 }
 
@@ -1268,4 +1525,109 @@ getgravconst :: proc(
 	case:
 		panic("ERROR: unknown gravity model")
 	}
+}
+
+
+TLEType :: enum {
+	verification,
+	catalog,
+	manual, // NOTE: manual entry has been removed
+}
+TLEInputType :: enum {
+	mfe,
+	epoch,
+	dayofyr,
+}
+
+import "core:strconv"
+twoline2rv :: proc(
+	longstr1, longstr2: string,
+	typerun: TLEType,
+	typeinput: TLEInputType,
+	opsmode: OperationMode,
+	whichconst: gravconsttype,
+	startmfe, stopmfe, deltamin: ^f64,
+	satrec: ^elsetrec,
+) {
+	deg2rad :: pi / 180.
+	xpdotp :: 1440. / (2. * pi)
+
+	sec, startsec, stopsec, startdayofyr, stopdayofyr: f64
+	jdstart, jdstop, jdstartF, jdstopF: f64
+
+	startyear, stopyear: int
+	startmon, stopmon: int
+	startday, stopday: int
+	starthr, stophr: int
+	startmin, stopmin: int
+	cardnumb, j: int
+
+	year, mon, day, hr, minute, nexp, ibexp: int
+
+	satrec.error = 0
+
+	longstr1_mut := strings.builder_make()
+	strings.write_string(&longstr1_mut, longstr1)
+	longstr2_mut := strings.builder_make()
+	strings.write_string(&longstr2_mut, longstr2)
+
+	for j = 10; j <= 15; j += 1 {
+		if longstr1_mut.buf[j] == ' ' {
+			longstr1_mut.buf[j] = '_'
+		}
+	}
+
+	if longstr1_mut.buf[44] != ' ' {
+		longstr1_mut.buf[43] = longstr1_mut.buf[44]
+	}
+	longstr1_mut.buf[44] = '.'
+	if (longstr1_mut.buf[7] == ' ') {
+		longstr1_mut.buf[7] = 'U'
+	}
+	if (longstr1_mut.buf[9] == ' ') {
+		longstr1_mut.buf[9] = '.'
+	}
+	for j = 45; j <= 49; j += 1 {
+		if (longstr1_mut.buf[j] == ' ') {
+			longstr1_mut.buf[j] = '0'
+		}
+	}
+	if (longstr1_mut.buf[51] == ' ') {
+		longstr1_mut.buf[51] = '0'
+	}
+	if (longstr1_mut.buf[53] != ' ') {
+		longstr1_mut.buf[52] = longstr1_mut.buf[53]
+	}
+	longstr1_mut.buf[53] = '.'
+	longstr2_mut.buf[25] = '.'
+	for j = 26; j <= 32; j += 1 {
+		if (longstr2_mut.buf[j] == ' ') {
+			longstr2_mut.buf[j] = '0'
+		}
+	}
+	if (longstr1_mut.buf[62] == ' ') {
+		longstr1_mut.buf[62] = '0'
+	}
+	if (longstr1_mut.buf[68] == ' ') {
+		longstr1_mut.buf[68] = '0'
+	}
+
+	// parsing
+	longstr1 := strings.to_string(longstr1_mut)
+	ok: bool
+
+	cardnumb, _ = strconv.parse_int(longstr1[:2])
+	satrec.satnum, _ = strconv.parse_int(longstr1[2:7])
+	if longstr1[7] == 'U' {
+		satrec.classification = .unclassified
+	} else {
+		satrec.classification = .classified
+	}
+	satrec.intldesg, _ = strconv.parse_int(longstr1[9:14])
+	satrec.intldesg_piece = strings.clone(longstr1[14:17])
+	satrec.epochyr , _ = strconv.parse_int(longstr1[18:20])
+	satrec.epochdays, _ = strconv.parse_f64(longstr1[20:32])
+	
+
+
 }
