@@ -62,8 +62,11 @@ main :: proc() {
 	strings.write_string(&longstr1_mut, longstr1_in)
 	longstr2_mut := strings.builder_make()
 	strings.write_string(&longstr2_mut, longstr2_in)
-
+	// inputs
 	satrec: sgp.elsetrec
+	typerun := sgp.TLEType.verification
+	xpdotp: f64
+	/////// 
 	ok: bool
 
 	ibexp, nexp, j: int
@@ -132,7 +135,7 @@ main :: proc() {
 	satrec.nddot, _ = strconv.parse_f64(longstr1[nndotind:50])
 	nexp, _ = strconv.parse_int(longstr1[50:52])
 	satrec.bstar, _ = strconv.parse_f64(longstr1[bstarind:59])
-	ibexp , _ = strconv.parse_int(longstr1[59:61])
+	ibexp, _ = strconv.parse_int(longstr1[59:61])
 	satrec.ephtype, _ = strconv.parse_int(longstr1[61:64])
 	elnumind := 64
 	if longstr1[64] == ' ' {
@@ -140,9 +143,42 @@ main :: proc() {
 	}
 	satrec.elnum, ok = strconv.parse_i64(longstr1[elnumind:69])
 
+	if typerun == .verification {
+		if longstr2_mut.buf[52] == ' ' {
+
+		} else {
+
+		}
+	} else {
+		if longstr2_mut.buf[52] == ' ' {
+
+		} else {
+
+		}
+	}
+
+	// find no, ndot, nddot
+	satrec.no_kozai = satrec.no_kozai / xpdotp
+	satrec.nddot = satrec.nddot * math.pow(10., f64(nexp))
+	satrec.bstar = satrec.bstar * math.pow(10., f64(ibexp))
+
+	// convert to sgp4 units
+	satrec.ndot = satrec.ndot / (xpdotp * 1440.)
+	satrec.nddot = satrec.nddot / (xpdotp * 1440. * 1440.)
+
+	// find standard orbital elements
+	satrec.inclo = satrec.inclo * deg2rad;
+	satrec.nodeo = satrec.nodeo * deg2rad;
+	satrec.argpo = satrec.argpo * deg2rad;
+	satrec.mo = satrec.mo * deg2rad;
+
+	if satrec. epochyr < 57 {
+		year = satrec.epochyr + 2000;
+	} else {
+		year = satrec.epochyr + 1900;
+	}
+
 	
-
-
 
 	fmt.println("This is the end")
 	fmt.println(longstr1[64:])
